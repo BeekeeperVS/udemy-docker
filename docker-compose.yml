@@ -1,0 +1,110 @@
+version: '3'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: udemy_docker-frontend
+    command: serve -s build -l 3000
+    restart: unless-stopped
+    networks:
+      - udemy-docker-network
+#    ports:
+#      - "3000:3000"
+
+  api:
+    # Дериктория где находится Dockerfile.dev
+    build: ./api
+    # Именование контейнера
+    container_name: udemy_docker-api
+    # Команды которые необходимо запустить
+    command: npm run start
+    # Рестарт контейнера
+    restart: unless-stopped
+    # Указываем которые порты нелбходимо открыть local-port | container-port
+    ports:
+      - "3001:3001"
+    # Переменныйе окруженя
+    environment:
+      - PORT=3001
+      - MONGO_URL=mongodb://api_db:27017/api
+      - AUTH_API_URL=http://auth:3002/api
+    # Указываются зависимости (т.е. какие сервисы необходимо запустить ранее)
+    depends_on:
+      - api_db
+    networks:
+      - udemy-docker-network
+
+  auth:
+    build: ./auth
+    container_name: udemy_docker-auth
+    command: npm run start
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - MONGO_URL=mongodb://auth_db:27017/auth
+      - API_URL=http://api:3001/api
+      - API_MAIL_URL=http://mail:3003/api
+    depends_on:
+      - auth_db
+      - mail
+    networks:
+      - udemy-docker-network
+
+  mail:
+    build: ./mail
+    container_name: udemy_docke-mail
+    command: npm run start
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+    networks:
+      - udemy-docker-network
+
+  api_db:
+    # образ mongo db
+    image: mongo:latest
+    # Именование контейнера
+    container_name: udemy_docker-api_db
+    volumes:
+      - mongodb_api:/data/db
+    networks:
+      - udemy-docker-network
+
+  auth_db:
+    # образ mongo db
+    image: mongo:latest
+    # Именование контейнера
+    container_name: udemy_docker-auth_db
+    volumes:
+      - mongodb_auth:/data/db
+    networks:
+      - udemy-docker-network
+
+  nginx:
+    image: nginx:stable-alpine
+    container_name: udemy_docker-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf.prod:/etc/nginx/conf.d/nginx.conf
+    depends_on:
+      - frontend
+      - api
+      - auth
+      - mail
+    networks:
+      - udemy-docker-network
+
+volumes:
+  mongodb_api:
+  mongodb_auth:
+
+networks:
+  udemy-docker-network:
+    driver: bridge
